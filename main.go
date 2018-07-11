@@ -12,18 +12,19 @@ import (
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
+	CheckOrigin: checkWsOrigin,
 }
 
 func main() {
-	// fs := http.FileServer(http.Dir("static"))
-	// http.Handle("/static/", http.StripPrefix("/static/", fs))
-	http.HandleFunc("/", serveWs)
+	registerHandlers()
 
 	log.Println("Listening on localhost:3000...")
 	http.ListenAndServeTLS(":3000", "server.crt", "server.key", nil)
 }
 
 func serveWs(w http.ResponseWriter, r *http.Request) {
+	log.Println("Upgrading request")
+
 	if conn, err := upgrader.Upgrade(w, r, nil); err != nil {
 		log.Println("Failed top upgrade ws:")
 		log.Println(err)
@@ -44,7 +45,11 @@ func readPump(conn *websocket.Conn) {
 			}
 			break
 		}
-		message = bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1))
-		log.Println(fmt.Sprintf("Got Message: %v", message))
+		msgStr := string(bytes.TrimSpace(bytes.Replace(message, []byte{'\n'}, []byte{' '}, -1)))
+		log.Println(fmt.Sprintf("Got Message: %v", msgStr))
 	}
+}
+
+func checkWsOrigin(r *http.Request) bool {
+	return true
 }
