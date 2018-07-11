@@ -1,3 +1,9 @@
 {{define "content"}}
-<h1>This is Game!</h1>
+<script src="/static/js/client.js"></script>
+<div class="d-flex">
+    <i id="status-icon" class="fas fa-unlink text-warning fa-1x ml-4"></i>
+    <span id="last-ws-box" class="ml-4" style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis"></span>
+</div>
+<canvas id="game-canvas" width=800 height=600 style="border: 1px solid gray;">
+</canvas>
 {{end}}

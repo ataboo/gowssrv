@@ -1,12 +1,13 @@
 package main
 
 import (
-	"net/http"
-	"log"
 	"fmt"
 	"html/template"
-	"github.com/ataboo/gowssrv/session"
+	"log"
+	"net/http"
 	"strings"
+
+	"github.com/ataboo/gowssrv/session"
 )
 
 func registerHandlers() {
@@ -27,7 +28,7 @@ func handleIndex(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/game", http.StatusSeeOther)
 	}
 
-	mustParseTemplates(w, newViewData(w, r),"base.tmpl", "index.tmpl")
+	mustParseTemplates(w, newViewData(w, r), "base.tmpl", "index.tmpl")
 }
 
 func handleSignup(w http.ResponseWriter, r *http.Request) {
@@ -58,11 +59,11 @@ func handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if len(userName) < 5 {
-		valErrs = append(valErrs,"Username must be at least 5 characters")
+		valErrs = append(valErrs, "Username must be at least 5 characters")
 	}
 
 	if session.GetByUsername(userName) != nil {
-		valErrs = append(valErrs,"A user already exists with that name")
+		valErrs = append(valErrs, "A user already exists with that name")
 	}
 
 	if len(valErrs) > 0 {
@@ -105,7 +106,6 @@ func handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/", 302)
 }
 
-
 func handleGame(w http.ResponseWriter, r *http.Request) {
 	if !checkSession(w, r, true) {
 		return
@@ -119,14 +119,15 @@ func handleWs(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	user := session.GetCurrentUser(w, r)
+
 	log.Println("Upgrading request")
 
 	if conn, err := upgrader.Upgrade(w, r, nil); err != nil {
 		log.Println("Failed to upgrade ws:")
 		log.Println(err)
-		return
 	} else {
-		readPump(conn)
+		readPump(conn, user)
 	}
 }
 
@@ -142,7 +143,7 @@ func checkSession(w http.ResponseWriter, r *http.Request, redirect bool) bool {
 	return authenticated
 }
 
-func mustParseTemplates(w http.ResponseWriter, data interface{}, files ...string) () {
+func mustParseTemplates(w http.ResponseWriter, data interface{}, files ...string) {
 	temp, err := parseTemplates(files...)
 	if err != nil {
 		log.Fatal(err.Error())
@@ -167,7 +168,7 @@ func tmplPath(filename string) string {
 
 type ViewData struct {
 	Flash interface{}
-	Auth bool
+	Auth  bool
 }
 
 func newViewData(w http.ResponseWriter, r *http.Request) ViewData {
@@ -181,8 +182,8 @@ func newViewData(w http.ResponseWriter, r *http.Request) ViewData {
 
 	fmt.Println(fmt.Sprintf("Found flash: %v", flash))
 
-	return ViewData {
+	return ViewData{
 		Flash: flash,
-		Auth: auth,
+		Auth:  auth,
 	}
 }

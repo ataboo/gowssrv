@@ -1,12 +1,14 @@
 package session
 
 import (
+	"crypto/rand"
+	"encoding/base64"
+	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
-
-	"bitbucket.org/ataboo/lasecapgo/atautils"
 )
 
 var Sessions *SessionManager
@@ -61,7 +63,7 @@ func (manager *SessionManager) SessionStart(w http.ResponseWriter, r *http.Reque
 }
 
 func (manager *SessionManager) createSession(w http.ResponseWriter) *SessionStore {
-	id := atautils.UniqueID()
+	id := UniqueID()
 	session, _ := manager.storage.Create(id)
 	cookie := http.Cookie{Name: manager.cookieName, Value: url.QueryEscape(id), Path: "/", HttpOnly: true, MaxAge: int(manager.maxLifeTime)}
 	http.SetCookie(w, &cookie)
@@ -87,4 +89,12 @@ func (manager *SessionManager) GC() {
 	defer manager.lock.Unlock()
 	manager.storage.SessionGC(manager.maxLifeTime)
 	time.AfterFunc(time.Duration(manager.maxLifeTime), func() { manager.GC() })
+}
+
+func UniqueID() string {
+	b := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, b); err != nil {
+		log.Fatal("Failed to generate random id.")
+	}
+	return base64.URLEncoding.EncodeToString(b)
 }
