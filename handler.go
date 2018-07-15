@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/ataboo/gowssrv/session"
+	"github.com/ataboo/gowssrv/storage"
 )
 
 func registerHandlers() {
@@ -16,11 +17,11 @@ func registerHandlers() {
 
 	http.HandleFunc("/", handleIndex)
 	http.HandleFunc("/signup", handleSignup)
-	http.HandleFunc("/create_user", handleCreateUser)
+	http.HandleFunc("/create_user", storeUser)
 	http.HandleFunc("/auth", handleAuth)
 	http.HandleFunc("/logout", handleLogout)
 	http.HandleFunc("/game", handleGame)
-	http.HandleFunc("/ws", handleWs)
+	//http.HandleFunc("/ws", handleWs)
 }
 
 func handleIndex(w http.ResponseWriter, r *http.Request) {
@@ -39,8 +40,9 @@ func handleSignup(w http.ResponseWriter, r *http.Request) {
 	mustParseTemplates(w, newViewData(w, r), "base.tmpl", "signup.tmpl")
 }
 
-func handleCreateUser(w http.ResponseWriter, r *http.Request) {
-	if checkSession(w, r, false) {
+func storeUser(w http.ResponseWriter, r *http.Request) {
+	currentSession := session.Sessions.SessionStart(w, r)
+	if currentSession.Get("user_id") != nil {
 		http.Redirect(w, r, "/game", http.StatusSeeOther)
 	}
 
@@ -62,21 +64,26 @@ func handleCreateUser(w http.ResponseWriter, r *http.Request) {
 		valErrs = append(valErrs, "Username must be at least 5 characters")
 	}
 
-	if session.GetByUsername(userName) != nil {
+	if _, err := storage.Users.ByUsername(userName); err != nil {
 		valErrs = append(valErrs, "A user already exists with that name")
 	}
 
-	if len(valErrs) > 0 {
-		session.Sessions.SessionStart(w, r).Set("flash_message", strings.Join(valErrs, ", "))
-		data := newViewData(w, r)
-		mustParseTemplates(w, data, "base.tmpl", "signup.tmpl")
-	} else {
-		user := session.AddUser(userName, password)
+	if len(valErrs) == 0 {
+		user, err := storage.Users.Store(userName, password)
 
-		newSession := session.Sessions.SessionStart(w, r)
-		newSession.Set("user_id", user.ID)
-		http.Redirect(w, r, "/game", 302)
+		if err != nil {
+			log.Println(fmt.Sprintf("Failed to store user: %v", err))
+			valErrs = append(valErrs, "Failed to store user")
+		} else {
+			currentSession.Set("user_id", user.ID)
+			http.Redirect(w, r, "/game", 302)
+			return
+		}
 	}
+
+	currentSession.Set("flash_message", strings.Join(valErrs, ", "))
+	data := newViewData(w, r)
+	mustParseTemplates(w, data, "base.tmpl", "signup.tmpl")
 }
 
 func handleAuth(w http.ResponseWriter, r *http.Request) {
@@ -85,13 +92,16 @@ func handleAuth(w http.ResponseWriter, r *http.Request) {
 		log.Fatal(err.Error())
 	}
 
+	newSession := session.Sessions.SessionStart(w, r)
+
 	userName := r.Form.Get("username")
 	password := r.Form.Get("password")
 
-	user := session.GetByUsername(userName)
+	user, err := storage.Users.ByUsername(userName)
 
-	newSession := session.Sessions.SessionStart(w, r)
-	if user != nil && user.CheckPassword(password) {
+	if err != nil && user.CheckPassword(password) {
+		//TODO: emit event that boots any other user using user_id from game.
+
 		newSession.Set("user_id", user.ID)
 		http.Redirect(w, r, "/game", 302)
 		return
@@ -114,22 +124,30 @@ func handleGame(w http.ResponseWriter, r *http.Request) {
 	mustParseTemplates(w, newViewData(w, r), "base.tmpl", "game.tmpl")
 }
 
-func handleWs(w http.ResponseWriter, r *http.Request) {
-	if !checkSession(w, r, true) {
-		return
-	}
-
-	user := session.GetCurrentUser(w, r)
-
-	log.Println("Upgrading request")
-
-	if conn, err := upgrader.Upgrade(w, r, nil); err != nil {
-		log.Println("Failed to upgrade ws:")
-		log.Println(err)
-	} else {
-		readPump(conn, user)
-	}
-}
+//func handleWs(w http.ResponseWriter, r *http.Request) {
+//	if !checkSession(w, r, true) {
+//		return
+//	}
+//
+//	user, err := session.GetCurrentUser(w, r)
+//
+//	if (err != nil) {
+//
+//	}
+//
+//	log.Println("Upgrading request")
+//
+//	if conn, err := upgrader.Upgrade(w, r, nil); err != nil {
+//		log.Println("Failed to upgrade ws:")
+//		log.Println(err)
+//	} else {
+//		gObjString, _ := json.Marshal(user.GameObj)
+//		update := append([]byte("player_update|"), gObjString...)
+//
+//		conn.WriteMessage(websocket.TextMessage, update)
+//		readPump(conn, user)
+//	}
+//}
 
 func checkSession(w http.ResponseWriter, r *http.Request, redirect bool) bool {
 	sessionStore := session.Sessions.SessionStart(w, r)

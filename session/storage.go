@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-var storage *StorageProvider
-
 type SessionStore struct {
 	id        string
 	lastLogin time.Time

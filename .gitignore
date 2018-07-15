@@ -3,3 +3,4 @@ server.crt
 gowssrv
 .idea
 .users.json
+config.toml

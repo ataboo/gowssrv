@@ -1,14 +1,11 @@
 package session
 
 import (
-	"crypto/rand"
-	"encoding/base64"
-	"io"
-	"log"
 	"net/http"
 	"net/url"
 	"sync"
 	"time"
+	"gopkg.in/mgo.v2/bson"
 )
 
 var Sessions *SessionManager
@@ -92,9 +89,5 @@ func (manager *SessionManager) GC() {
 }
 
 func UniqueID() string {
-	b := make([]byte, 32)
-	if _, err := io.ReadFull(rand.Reader, b); err != nil {
-		log.Fatal("Failed to generate random id.")
-	}
-	return base64.URLEncoding.EncodeToString(b)
+	return bson.NewObjectId().String()
 }

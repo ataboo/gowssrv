@@ -1,7 +1,7 @@
 window.onload = function() {
-    var statusIcon = this.document.getElementById("status-icon");
-    var socket = new WebSocket("wss://" + document.location.host + "/ws");
-    var keysDown = {};
+    let statusIcon = this.document.getElementById("status-icon");
+    let socket = new WebSocket("wss://" + document.location.host + "/ws");
+    let keysDown = {};
 
     socket.onopen = function() {
         $('#status-icon').attr('data-icon', 'link')
@@ -11,17 +11,39 @@ window.onload = function() {
         _firstStart();
 
         socket.send("Tadaa!");
-    }
+    };
 
     socket.onclose = function() {
         $('#status-icon').attr('data-icon', 'unlink')
             .addClass('text-warning')
             .removeClass('text-success');
-    }
+    };
 
     socket.onmessage = function(msg) {
         $('#last-ws-box').html('Last response: "'+msg.data+'"');
-    }
+
+        let split = msg.data.split("|");
+
+        if (split.length === 2) {
+            let event = split[0];
+            let data = split[1];
+
+            switch (event) {
+                case "player_update":
+                    let gameObject = JSON.parse(data);
+
+                    player.x = gameObject.x;
+                    player.y = gameObject.y;
+                    player.w = gameObject.w;
+                    player.h = gameObject.h;
+
+                    console.dir(gameObject);
+                    break;
+                default:
+                    console.error("Can't handle event: "+event);
+            }
+        }
+    };
 
     const K_UP = 38;
     const K_DOWN = 40;
