@@ -1,9 +1,9 @@
 package main
 
 import (
-	"log"
 	"net/http"
 	"github.com/gorilla/websocket"
+	"github.com/ataboo/gowssrv/api"
 )
 
 var upgrader = websocket.Upgrader{
@@ -13,13 +13,7 @@ var upgrader = websocket.Upgrader{
 }
 
 func main() {
-	registerHandlers()
-
-	log.Println("Attempting to Listen on localhost:3000...")
-	err := http.ListenAndServeTLS(":3000", "server.crt", "server.key", nil)
-	if err != nil {
-		log.Fatal(err)
-	}
+	api.Start()
 }
 
 //func readPump(conn *websocket.Conn, user *session.User) {

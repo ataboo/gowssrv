@@ -7,9 +7,10 @@ import (
 )
 
 type User struct {
-	ID bson.ObjectId `bson:"_id" json:"id"`
-	Username string `bson:"user_name" json:"user_name"`
-	AuthHashed []byte `bson:"auth_hashed" json:"auth_hashed"`
+	ID         bson.ObjectId `bson:"_id" json:"id"`
+	Username   string        `bson:"user_name" json:"user_name"`
+	AuthHashed []byte        `bson:"auth_hashed" json:"auth_hashed"`
+	SessionId  string        `bson:"session_id" json:"session_id"`
 }
 
 func (user *User) CheckPassword(password string) bool {
@@ -24,4 +25,31 @@ func (user *User) SetPassword(password string) error {
 	user.AuthHashed = hashed
 
 	return nil
+}
+
+type UserSubmit struct {
+	Username string `json:"user_name"`
+	Password string `json:"password"`
+}
+
+func (u *UserSubmit) ValidateCreate() (valErrs []string) {
+	if len(u.Password) < 8 {
+		valErrs = append(valErrs, "Password must be at least 8 characters")
+	}
+
+	if len(u.Username) < 5 {
+		valErrs = append(valErrs, "Username must be at least 5 characters")
+	}
+
+	return valErrs
+}
+
+func (u *UserSubmit) ToUser() User {
+	user := User{}
+
+	user.ID = bson.NewObjectId()
+	user.Username = u.Username
+	user.SetPassword(u.Password)
+
+	return user
 }

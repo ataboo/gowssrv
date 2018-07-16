@@ -13,11 +13,11 @@ func init() {
 }
 
 func connectMongoDb() *mgo.Database {
-	session, err := mgo.Dial(Config.MongoServer)
+	session, err := mgo.Dial(Config.Mongo.Server)
 	if err != nil {
 		log.Println("Failed to connect to Mongo")
 		log.Fatal(err)
 	}
 
-	return session.DB(Config.MongoDb)
+	return session.DB(Config.Mongo.DB)
 }

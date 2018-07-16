@@ -3,49 +3,77 @@ package storage
 import (
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
-	"github.com/ataboo/gowssrv/models"
+	. "github.com/ataboo/gowssrv/models"
+	"sync"
+	"fmt"
 )
 
-var Users UserDao
+const userCollection = "users"
+
+var Users userDao
 
 func init() {
-	Users = UserDao{"users"}
+	Users = userDao{userCollection, sync.Mutex{}}
 }
 
-type UserDao struct {
+// userDao Data Access Object for users
+type userDao struct {
 	colName string
+	lock sync.Mutex
 }
 
-func (m UserDao) Collection() *mgo.Collection {
+func (m userDao) Collection() *mgo.Collection {
 	return Mongo.C(m.colName)
 }
 
-func (m UserDao) Find(id string) (models.User, error) {
-	user := models.User{}
-	err := m.Collection().FindId(id).One(user)
+func (m userDao) Find(id string) (User, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	user := User{}
+
+	if !bson.IsObjectIdHex(id) {
+		return user, fmt.Errorf("invalid object id")
+	}
+
+	err := m.Collection().FindId(bson.ObjectIdHex(id)).One(&user)
+	return user, err
+}
+
+func (m userDao) ByUsername(username string) (User, error) {
+	user := User{}
+	err := m.Collection().Find(bson.M{"user_name": username}).One(&user)
 
 	return user, err
 }
 
-func (m UserDao) ByUsername(username string) (models.User, error) {
-	user := models.User{}
-	err := m.Collection().Find(bson.M{"username": username}).One(user)
+func (m userDao) BySession(sessionId string) (User, error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	user := User{}
+	err := m.Collection().Find(bson.M{"session_id": sessionId}).One(user)
 
 	return user, err
 }
 
-func (m UserDao) Store(username string, password string) (models.User, error) {
-	user := models.User{}
-	user.ID = bson.NewObjectId()
-	user.Username = username
-	user.SetPassword(password)
-	err := m.Save(user)
+func (m userDao) Store(user User) (error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	return user, err
+	if _, err := m.ByUsername(user.Username); err == nil {
+		return fmt.Errorf("username already taken")
+	}
+	err := m.Collection().Insert(&user)
+
+	return err
 }
 
-func (m UserDao) Save(user models.User) (error) {
-	_, err := m.Collection().UpsertId(user.ID, &user)
+func (m userDao) Save(user User) (error) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	err := m.Collection().UpdateId(user.ID, &user)
 
 	return err
 }

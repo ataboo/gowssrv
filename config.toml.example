@@ -1,2 +1,3 @@
-MongoDb="gowssrv_db"
-MongoServer="localhost"
+[mongo]
+db="gowssrv_db"
+server="localhost"
