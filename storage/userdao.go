@@ -52,7 +52,7 @@ func (m userDao) BySession(sessionId string) (User, error) {
 	defer m.lock.Unlock()
 
 	user := User{}
-	err := m.Collection().Find(bson.M{"session_id": sessionId}).One(user)
+	err := m.Collection().Find(bson.M{"session_id": sessionId}).One(&user)
 
 	return user, err
 }

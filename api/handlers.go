@@ -10,19 +10,23 @@ import (
 	"github.com/gorilla/mux"
 	"encoding/json"
 	"github.com/ataboo/gowssrv/models"
-	"github.com/dgrijalva/jwt-go"
-	"strings"
+	"github.com/gorilla/websocket"
 )
 
+var upgrader = websocket.Upgrader{
+	CheckOrigin: func(r *http.Request) bool {
+		return true
+	},
+}
+
+
 func registerHandlers(r *mux.Router) {
-
-
 	r.HandleFunc("/", index).Methods("GET")
-	r.Handle("/restricted", jwtRequired(restricted)).Methods("GET")
+	r.Handle("/restricted", tokenMiddleware(restricted)).Methods("GET")
 	r.HandleFunc("/user", storeUser).Methods("POST")
 	r.HandleFunc("/auth", authorize).Methods("POST")
-	r.HandleFunc("/logout", jwtRequired(logout)).Methods("POST")
-	//r.HandleFunc("/ws", upgradeWs).Methods("GET")
+	r.HandleFunc("/logout", tokenMiddleware(logout)).Methods("POST")
+	r.HandleFunc("/ws", tokenMiddleware(upgradeWs)).Methods("GET")
 }
 
 func index(w http.ResponseWriter, r *http.Request) {
@@ -82,120 +86,38 @@ func authorize(w http.ResponseWriter, r *http.Request) {
 
 	//TODO: rate limit.
 
-	raw, err := createToken(user)
-	if err != nil {
-		log.Println("Error creating token: " + err.Error())
-		jsonResponse(w, 500, "Failed to authorize, please try again later.")
-		return
-	}
-
-	signature := strings.Split(raw, ".")[2]
+	token := makeToken()
 
 	//TODO: boot user from game if existing session.
 
-	user.SessionId = signature
+	user.SessionId = token
 	storage.Users.Save(user)
 
-	jsonResponse(w, 200, map[string]string{
+	jsonResponse(w, 200, map[string]interface{}{
 		"message": "started new session",
-		"token": raw,
+		"token": token,
 	})
 }
 
 func logout(w http.ResponseWriter, r *http.Request) {
-	token := r.Context().Value("user_token").(*jwt.Token)
+	user := r.Context().Value("user").(models.User)
 
-	fmt.Printf("\nRaw: %v", token.Raw)
-	fmt.Printf("\nClaims: %v", token.Claims)
-	fmt.Printf("\nSignature: %v", token.Signature)
+	// This is safe as long as we validate the token in the middleware.
+	user.SessionId = ""
+	storage.Users.Save(user)
+
+	jsonResponse(w, 200, "Logged out successfully")
 }
 
-func handleGame(w http.ResponseWriter, r *http.Request) {
-	if !checkSession(w, r, true) {
+func upgradeWs(w http.ResponseWriter, r *http.Request) {
+	Logger.Debug("Upgrading websocket")
+
+	conn, err := upgrader.Upgrade(w, r, nil)
+
+	if err != nil {
+		jsonErrorResponse(w, 400, "Failed to upgrade connection")
 		return
 	}
 
-	mustParseTemplates(w, newViewData(w, r), "base.tmpl", "game.tmpl")
-}
 
-//func handleWs(w http.ResponseWriter, r *http.Request) {
-//	if !checkSession(w, r, true) {
-//		return
-//	}
-//
-//	user, err := session.GetCurrentUser(w, r)
-//
-//	if (err != nil) {
-//
-//	}
-//
-//	log.Println("Upgrading request")
-//
-//	if conn, err := upgrader.Upgrade(w, r, nil); err != nil {
-//		log.Println("Failed to upgrade ws:")
-//		log.Println(err)
-//	} else {
-//		gObjString, _ := json.Marshal(user.GameObj)
-//		update := append([]byte("player_update|"), gObjString...)
-//
-//		conn.WriteMessage(websocket.TextMessage, update)
-//		readPump(conn, user)
-//	}
-//}
-
-func checkSession(w http.ResponseWriter, r *http.Request, redirect bool) bool {
-	sessionStore := session.Sessions.SessionStart(w, r)
-	authenticated := sessionStore.Get("user_id") != nil
-
-	if !authenticated && redirect {
-		sessionStore.Set("flash_message", "Session expired. Please log in.")
-		http.Redirect(w, r, "/", 302)
-	}
-
-	return authenticated
-}
-
-func mustParseTemplates(w http.ResponseWriter, data interface{}, files ...string) {
-	temp, err := parseTemplates(files...)
-	if err != nil {
-		log.Fatal(err.Error())
-	}
-
-	if err := temp.Execute(w, data); err != nil {
-		log.Fatal(err)
-	}
-}
-
-func parseTemplates(files ...string) (*template.Template, error) {
-	for i, name := range files {
-		files[i] = tmplPath(name)
-	}
-
-	return template.ParseFiles(files...)
-}
-
-func tmplPath(filename string) string {
-	return fmt.Sprintf("resources/templates/%s", filename)
-}
-
-type ViewData struct {
-	Flash interface{}
-	Auth  bool
-}
-
-func newViewData(w http.ResponseWriter, r *http.Request) ViewData {
-	currentSession := session.Sessions.SessionStart(w, r)
-	auth := currentSession.Get("user_id") != nil
-	flash := currentSession.Get("flash_message")
-
-	if flash != nil {
-		currentSession.Delete("flash_message")
-	}
-
-	fmt.Println(fmt.Sprintf("Found flash: %v", flash))
-
-	return ViewData{
-		Flash: flash,
-		Auth:  auth,
-	}
 }

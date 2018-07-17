@@ -24,7 +24,7 @@ type mongo struct {
 }
 
 type api struct {
-	JwtSecret string
+	HostAddress string
 }
 
 // Read and parse the configuration file
